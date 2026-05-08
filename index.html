@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>우리家 가계부</title>
+<link rel="icon" href="data:,">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F8FAFC;max-width:430px;margin:0 auto;min-height:100vh}
@@ -126,7 +127,7 @@ button,input,select{font-family:inherit;cursor:pointer}
       <button id="tb2" onclick="setT('저축')" style="-webkit-box-flex:1;flex:1;padding:10px 0;border-radius:12px;border:none;font-size:13px;font-weight:600;background:#F1F5F9;color:#64748B">저축</button>
     </div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📅 날짜</label><input type="date" id="fd" class="fi"></div>
-    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">✏️ 내용</label><input type="text" id="fc" placeholder="예) 마트 장보기" class="fi"></div>
+    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">✏️ 내용</label><input type="text" id="fcontent" placeholder="예) 마트 장보기" class="fi"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💰 금액 (원)</label><input type="number" id="fa" placeholder="0" class="fi"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📂 대분류</label><select id="fcat" class="fi" onchange="updSub()"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">🏷 소분류</label><select id="fsub" class="fi"></select></div>
@@ -253,13 +254,13 @@ function renderList(){
   var cats=['전체'].concat(uniq(mTx.map(function(t){return t.category;})));
   var methods=['전체'].concat(uniq(mTx.map(function(t){return t.method;})));
   var th='';
-  for(var i=0;i<['전체','수입','지출','저축'].length;i++){var f=['전체','수입','지출','저축'][i];var on=AF.type===f;th+='<button class="fb'+(on?' on':'')+'" style="'+(on?'background:#0D9488;color:white':'')+'" onclick="setF('type',''+f+'')">'+f+'</button>';}
+  for(var i=0;i<['전체','수입','지출','저축'].length;i++){var f=['전체','수입','지출','저축'][i];var on=AF.type===f;th+='<button class="fb'+(on?' on':'')+'" style="'+(on?'background:#0D9488;color:white':'')+'" onclick="setF(&quot;type&quot;,&quot;'+f+'&quot;)">'+f+'</button>'; }
   gi('ft').innerHTML=th;
   var ch='';
-  for(var i=0;i<Math.min(cats.length,12);i++){var c=cats[i];var on=AF.cat===c;var col=c==='전체'?'#6366F1':gc(c);ch+='<button class="fb sm'+(on?' on':'')+'" style="'+(on?'background:'+col+';color:white':'')+'" onclick="setF('cat',''+c+'')">'+(c==='전체'?'전체':ge(c)+' '+c)+'</button>';}
+  for(var i=0;i<Math.min(cats.length,12);i++){var c=cats[i];var on=AF.cat===c;var col=c==='전체'?'#6366F1':gc(c);ch+='<button class="fb sm'+(on?' on':'')+'" style="'+(on?'background:'+col+';color:white':'')+'" onclick="setF(&quot;cat&quot;,&quot;'+c+'&quot;)">'+(c==='전체'?'전체':ge(c)+' '+c)+'</button>'; }
   gi('fc').innerHTML=ch;
   var mh='';
-  for(var i=0;i<methods.length;i++){var m=methods[i];var on=AF.method===m;var col=(MC[m]||'#6366F1');mh+='<button class="fb sm'+(on?' on':'')+'" style="'+(on?'background:'+col+';color:white':'')+'" onclick="setF('method',''+m+'')">💳 '+(m==='전체'?'전체':m)+'</button>';}
+  for(var i=0;i<methods.length;i++){var m=methods[i];var on=AF.method===m;var col=(MC[m]||'#6366F1');mh+='<button class="fb sm'+(on?' on':'')+'" style="'+(on?'background:'+col+';color:white':'')+'" onclick="setF(&quot;method&quot;,&quot;'+m+'&quot;)">💳 '+(m==='전체'?'전체':m)+'</button>'; }
   gi('fm').innerHTML=mh;
   var q=gi('srch').value||'';
   var filtered=[];
@@ -320,7 +321,7 @@ function renderSettings(){
 function openM(){
   var mm=CM<10?'0'+CM:''+CM;
   gi('fd').value='2026-'+mm+'-01';
-  gi('fc').value='';gi('fa').value='';
+  gi('fcontent').value='';gi('fa').value='';
   setT('지출');
   var cs=gi('fcat'),ckeys=Object.keys(CSUB),h='';
   for(var i=0;i<ckeys.length;i++){h+='<option value="'+ckeys[i]+'">'+ge(ckeys[i])+' '+ckeys[i]+'</option>';}
@@ -342,7 +343,7 @@ function updSub(){
   gi('fsub').innerHTML=h;
 }
 function addTx(){
-  var content=gi('fc').value.replace(/^\s+|\s+$/g,'');
+  var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
   var amount=parseInt(gi('fa').value)||0;
   if(!content||!amount)return;
   var tx={id:Date.now(),date:gi('fd').value,content:content,amount:amount,
