@@ -45,7 +45,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 
 <!-- 홈 -->
 <div id="p-home" style="padding-bottom:80px">
-  <div style="display:-webkit-box;display:flex;gap:8px;padding:16px 16px 0">
+  <div id="connHome" style="margin:10px 16px 0;font-size:11px;color:#64748B;text-align:right">시트 연결 확인 중</div>
+  <div style="display:-webkit-box;display:flex;gap:8px;padding:10px 16px 0">
     <div style="-webkit-box-flex:1;flex:1;background:white;border-radius:16px;padding:12px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center">
       <div style="font-size:11px;font-weight:600;color:#10B981;margin-bottom:4px">📈 수입</div>
       <div id="v-i" style="font-size:11px;font-weight:700;color:#1E293B">-</div>
@@ -63,6 +64,10 @@ button,input,select{font-family:inherit;cursor:pointer}
     <span style="font-size:13px;color:#64748B;font-weight:500">이달의 잔액</span>
     <span id="v-b" style="font-size:17px;font-weight:700;color:#059669">-</span>
   </div>
+  <button onclick="goTab('reserve')" style="width:calc(100% - 32px);margin:10px 16px 0;padding:12px 16px;border:none;border-radius:14px;display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;-webkit-box-align:center;align-items:center;background:#FFFBEB;border:1px solid #FDE68A;text-align:left">
+    <span style="font-size:13px;color:#92400E;font-weight:700">🛟 예비비 현황</span>
+    <span id="homeReserveAmt" style="font-size:15px;font-weight:800;color:#B45309">-</span>
+  </button>
   <div class="card">
     <div class="ct">카테고리별 지출</div>
     <div id="pie"></div>
@@ -110,8 +115,29 @@ button,input,select{font-family:inherit;cursor:pointer}
 
 <!-- 설정 -->
 <div id="p-settings" style="display:none;padding-bottom:80px">
+  <div id="connSettings" style="margin:10px 16px 0;font-size:11px;color:#64748B;text-align:right">시트 연결 확인 중</div>
   <div class="card"><div id="settingsSummaryTitle" class="ct">📊 2026년 전체 현황 (0건)</div><div id="ts"></div></div>
+  <button onclick="goTab('reserve')" class="card" style="width:calc(100% - 32px);border:none;text-align:left;display:block">
+    <div class="ct" style="margin-bottom:4px">🛟 예비비 보기</div>
+    <div id="settingsReserveAmt" style="font-size:18px;font-weight:800;color:#B45309">-</div>
+    <div style="font-size:11px;color:#94A3B8;margin-top:4px">Google Sheet에서 내려온 예비비 요약을 확인합니다.</div>
+  </button>
   <div class="card"><div class="ct">💳 지출방법</div><div id="mt" style="margin-top:4px"></div></div>
+</div>
+
+<!-- 예비비 -->
+<div id="p-reserve" style="display:none;padding-bottom:80px">
+  <div id="connReserve" style="margin:10px 16px 0;font-size:11px;color:#64748B;text-align:right">시트 연결 확인 중</div>
+  <div class="card">
+    <div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;-webkit-box-align:center;align-items:center;margin-bottom:10px">
+      <div class="ct" style="margin:0">🛟 예비비</div>
+      <button onclick="goTab('settings')" style="background:#F1F5F9;border:none;border-radius:10px;padding:6px 10px;font-size:12px;color:#64748B;font-weight:700">설정으로</button>
+    </div>
+    <div id="reserveSummary"></div>
+  </div>
+  <div class="card"><div class="ct">분류별 현황</div><div id="reserveCategories"></div></div>
+  <div class="card"><div class="ct">입금 내역</div><div id="reserveDeposits"></div></div>
+  <div class="card"><div class="ct">사용 내역</div><div id="reserveExpenses"></div></div>
 </div>
 
 <!-- 모달 -->
@@ -158,17 +184,21 @@ var RAW=[[1, "2026-01-08", "아파트 대출", 1119012, "고정지출", "아파�
 var APP_YEAR = 2026;
 var MIN_MONTH = 1;
 var MAX_MONTH = 12;
-var API_BASE_URL = '';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbx5T3ZBYBUlneCvmd8CGZT0lYyxvrNLx97uENbXFjXx6cUzMg7M_QhOQRHFhJEz8Z901w/exec';
 var CONFIG = {
   categoryColors: CC,
   categoryEmojis: CE,
   categorySubs: CSUB,
+  categories: Object.keys(CSUB),
+  methods: PM,
   paymentMethods: PM,
   paymentColors: MC,
   year: APP_YEAR
 };
 
 var CM=5, extras=[], AF={type:'전체',cat:'전체',method:'전체'}, FT='지출';
+var DATA_STATUS='loading';
+var RESERVE_DATA={summary:null,categories:[],deposits:[],expenses:[]};
 var BTX = loadData();
 try{
   var _s=localStorage.getItem('bgt5');
@@ -192,34 +222,80 @@ function refreshVisible(){
   if(gi('p-list').style.display!=='none')renderList();
   if(gi('p-stats').style.display!=='none')renderStats();
   if(gi('p-settings').style.display!=='none')renderSettings();
+  if(gi('p-reserve').style.display!=='none')renderReserve();
 }
 
 function loadData(){
-  // API_BASE_URL이 비어 있으면 RAW를 사용하고, 값이 생기면 Apps Script ?action=load 응답으로 교체한다.
+  // API_BASE_URL이 있으면 Apps Script ?action=load 응답을 읽고, 실패하면 RAW를 유지한다.
   var fallback=normalizeRows(RAW);
   if(!API_BASE_URL||typeof fetch!=='function')return fallback;
   fetch(API_BASE_URL+'?action=load')
     .then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json();})
     .then(function(data){
+      if(data&&data.ok===false)throw new Error(data.error||'API 응답 오류');
+      applyConfig(data&&data.config);
+      if(data&&data.reserve)RESERVE_DATA=normalizeReserve(data.reserve);
       var rows=data&&data.transactions?data.transactions:data;
       BTX=normalizeRows(rows);
+      DATA_STATUS='connected';
       refreshVisible();
     })
     .catch(function(err){
       console.warn('Google Sheets 데이터 로드 실패, RAW 데이터로 표시합니다.', err);
       BTX=fallback;
+      DATA_STATUS='fallback';
       refreshVisible();
     });
   return fallback;
 }
 
-function normalizeTx(src){
-  var t={};
-  if(Object.prototype.toString.call(src)==='[object Array]'){
-    t={id:src[0],date:src[1],content:src[2],amount:src[3],category:src[4],sub:src[5],method:src[6],month:src[7]};
-  }else{
-    t={id:src.id,date:src.date,content:src.content,amount:src.amount,category:src.category,sub:src.sub,method:src.method,month:src.month,type:src.type};
+function applyConfig(cfg){
+  if(!cfg)return;
+  if(cfg.categoryColors)CONFIG.categoryColors=cfg.categoryColors;
+  if(cfg.categoryEmojis)CONFIG.categoryEmojis=cfg.categoryEmojis;
+  var cats=cfg.categories||cfg.categorySubs;
+  if(cats){
+    var catList=Object.prototype.toString.call(cats)==='[object Array]'?cats:Object.keys(cats);
+    if(catList.length){
+      CONFIG.categories=catList;
+      if(Object.prototype.toString.call(cats)==='[object Object]')CONFIG.categorySubs=cats;
+    }
   }
+  var methods=cfg.methods||cfg.paymentMethods;
+  if(methods){
+    var methodList=Object.prototype.toString.call(methods)==='[object Array]'?methods:Object.keys(methods);
+    if(methodList.length){
+      CONFIG.methods=methodList;
+      CONFIG.paymentMethods=CONFIG.methods;
+    }
+  }
+  if(cfg.paymentColors)CONFIG.paymentColors=cfg.paymentColors;
+}
+
+function normalizeReserve(src){
+  src=src||{};
+  return {
+    summary:src.summary||null,
+    categories:src.categories||[],
+    deposits:src.deposits||[],
+    expenses:src.expenses||[],
+    raw:src.raw||null
+  };
+}
+
+function normalizeTx(src){
+  var isArr=Object.prototype.toString.call(src)==='[object Array]';
+  var t={
+    id:isArr?src[0]:src.id,
+    date:isArr?src[1]:src.date,
+    content:isArr?src[2]:src.content,
+    amount:isArr?src[3]:src.amount,
+    category:isArr?src[4]:src.category,
+    sub:isArr?src[5]:src.sub,
+    method:isArr?src[6]:src.method,
+    month:isArr?src[7]:(src.month||src.sheetName),
+    type:isArr?null:src.type
+  };
   t.id=t.id||Date.now();
   t.date=t.date||(''+APP_YEAR+'-01-01');
   t.content=t.content||'';
@@ -261,20 +337,67 @@ function uniq(arr){var seen={},r=[];for(var i=0;i<arr.length;i++){if(!seen[arr[i
 // 배열 정렬 (숫자 내림차순)
 function sortDesc(arr){return arr.slice().sort(function(a,b){return b[1]-a[1];});}
 
+function updateConnectionStatus(){
+  var txt=DATA_STATUS==='connected'?'시트 연결됨':DATA_STATUS==='fallback'?'시트 연결 실패, 로컬 데이터 사용 중':'시트 연결 확인 중';
+  var col=DATA_STATUS==='connected'?'#0D9488':DATA_STATUS==='fallback'?'#DC2626':'#64748B';
+  var ids=['connHome','connSettings','connReserve'];
+  for(var i=0;i<ids.length;i++){var el=gi(ids[i]);if(el){el.textContent=txt;el.style.color=col;}}
+}
+
+function reserveAmount(){
+  var s=RESERVE_DATA&&RESERVE_DATA.summary;
+  if(!s)return null;
+  var keys=['balance','remaining','currentBalance','reserveBalance','total','amount','잔액','합계'];
+  for(var i=0;i<keys.length;i++){if(s[keys[i]]!=null&&s[keys[i]]!=='')return parseInt(String(s[keys[i]]).replace(/[^0-9-]/g,''),10)||0;}
+  return null;
+}
+
+function updateReserveBadges(){
+  var amt=reserveAmount(), txt=amt==null?'예비비 데이터 준비 중':fmt(amt);
+  if(gi('homeReserveAmt'))gi('homeReserveAmt').textContent=txt;
+  if(gi('settingsReserveAmt'))gi('settingsReserveAmt').textContent=txt;
+}
+
+function renderReserveRows(data){
+  if(!data)return '';
+  var arr=Object.prototype.toString.call(data)==='[object Array]'?data:objArr(data);
+  var h='';
+  for(var i=0;i<arr.length;i++){
+    var r=arr[i], label='', val='';
+    if(Object.prototype.toString.call(r)==='[object Array]'){label=r[0];val=r[1];}
+    else{label=r.name||r.category||r.date||r.title||r.content||('항목 '+(i+1));val=r.amount||r.balance||r.total||r.value||'';}
+    h+='<div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;padding:9px 0;border-bottom:1px solid #F1F5F9"><span style="font-size:13px;color:#475569">'+esc(label)+'</span><span style="font-size:13px;font-weight:700;color:#1E293B">'+(typeof val==='number'?fmt(val):esc(val))+'</span></div>';
+  }
+  return h;
+}
+
+function renderReserve(){
+  updateConnectionStatus();
+  updateReserveBadges();
+  var rd=RESERVE_DATA||{summary:null,categories:[],deposits:[],expenses:[]};
+  gi('reserveSummary').innerHTML=renderReserveRows(rd.summary)||'<div style="text-align:center;color:#94A3B8;padding:16px;font-size:13px">예비비 요약 데이터 준비 중</div>';
+  var msg='<div style="text-align:center;color:#94A3B8;padding:16px;font-size:13px">예비비 상세 데이터 준비 중</div>';
+  gi('reserveCategories').innerHTML=renderReserveRows(rd.categories)||msg;
+  gi('reserveDeposits').innerHTML=renderReserveRows(rd.deposits)||msg;
+  gi('reserveExpenses').innerHTML=renderReserveRows(rd.expenses)||msg;
+}
+
 // ── 탭 전환 ──
 function goTab(t){
-  var tabs=['home','list','stats','settings'];
+  var tabs=['home','list','stats','settings','reserve'];
   for(var i=0;i<tabs.length;i++){
     gi('p-'+tabs[i]).style.display='none';
     var nb=gi('n-'+tabs[i]);
     if(nb)nb.className=nb.className.replace(/ on/g,'');
   }
   gi('p-'+t).style.display='block';
-  var nb=gi('n-'+t);
+  var navKey=t==='reserve'?'settings':t;
+  var nb=gi('n-'+navKey);
   if(nb)nb.className+=(' on');
   if(t==='list')renderList();
   else if(t==='stats')renderStats();
   else if(t==='settings')renderSettings();
+  else if(t==='reserve')renderReserve();
   else renderHome();
 }
 
@@ -287,6 +410,8 @@ function chM(d){
 
 // ── 홈 렌더 ──
 function renderHome(){
+  updateConnectionStatus();
+  updateReserveBadges();
   var s=computeMonthlySummary(allTx())[CM]||{i:0,e:0,s:0};
   gi('v-i').textContent=fmt(s.i);
   gi('v-e').textContent=fmt(s.e);
@@ -394,6 +519,8 @@ function renderStats(){
 
 // ── 설정 렌더 ──
 function renderSettings(){
+  updateConnectionStatus();
+  updateReserveBadges();
   var tx=allTx();
   gi('settingsSummaryTitle').textContent='📊 '+APP_YEAR+'년 전체 현황 ('+tx.length+'건)';
   var tI=0,tE=0,tS=0;
