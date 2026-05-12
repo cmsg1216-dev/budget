@@ -144,7 +144,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 <div id="modal" class="modal-bg">
   <div class="modal">
     <div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;-webkit-box-align:center;align-items:center;margin-bottom:18px">
-      <span id="modalTitle" style="font-size:17px;font-weight:700;color:#1E293B">거래 추가</span>
+      <span style="font-size:17px;font-weight:700;color:#1E293B">거래 추가</span>
       <button onclick="closeM()" style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 10px;font-size:16px">✕</button>
     </div>
     <div style="display:-webkit-box;display:flex;gap:8px;margin-bottom:18px">
@@ -158,7 +158,6 @@ button,input,select{font-family:inherit;cursor:pointer}
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📂 대분류</label><select id="fcat" class="fi" onchange="updSub()"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">🏷 소분류</label><select id="fsub" class="fi"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💳 지출방법</label><select id="fmet" class="fi"></select></div>
-    <button id="deleteTxBtn" onclick="deleteEditingTx()" style="display:none;width:100%;margin-top:12px;padding:13px;background:#FEE2E2;color:#DC2626;border:none;border-radius:16px;font-size:14px;font-weight:700">🗑 삭제하기</button>
     <button id="saveTxBtn" onclick="addTx()" style="width:100%;margin-top:18px;padding:15px;background:linear-gradient(135deg,#0F766E,#14B8A6);color:white;border:none;border-radius:16px;font-size:15px;font-weight:700">✅ 추가하기</button>
   </div>
 </div>
@@ -200,7 +199,6 @@ var CONFIG = {
 var CM=5, extras=[], AF={type:'전체',cat:'전체',method:'전체'}, FT='지출';
 var DATA_STATUS='loading';
 var SAVING_TX=false;
-var EDITING_TX=null;
 var RESERVE_DATA={summary:null,categories:[],deposits:[],expenses:[]};
 var BTX = loadData();
 try{
@@ -297,12 +295,7 @@ function normalizeTx(src){
     sub:isArr?src[5]:src.sub,
     method:isArr?src[6]:src.method,
     month:isArr?src[7]:(src.month||src.sheetName),
-    type:isArr?null:src.type,
-    sheetName:isArr?null:src.sheetName,
-    section:isArr?null:src.section,
-    rowNumber:isArr?null:src.rowNumber,
-    no:isArr?null:src.no,
-    memo:isArr?'':src.memo
+    type:isArr?null:src.type
   };
   t.id=t.id||Date.now();
   t.date=t.date||(''+APP_YEAR+'-01-01');
@@ -314,7 +307,6 @@ function normalizeTx(src){
   t.month=parseInt(t.month||String(t.date).slice(5,7),10)||1;
   if(t.month<MIN_MONTH||t.month>MAX_MONTH)t.month=MIN_MONTH;
   t.type=t.type||(t.category==='수입'?'수입':t.category==='저축'?'저축':'지출');
-  t.memo=t.memo||'';
   return t;
 }
 
@@ -451,8 +443,8 @@ function txH(t){
   var c=gc(t.category),mc=CONFIG.paymentColors[t.method]||'#94A3B8';
   var ac=t.type==='수입'?'#10B981':t.type==='저축'?'#3B82F6':'#EF4444';
   var sg=t.type==='수입'?'+':'-';
-  var del=(!t.sheetName&&String(t.id).length>6)?'<button data-delid="'+esc(t.id)+'" onclick="event.stopPropagation();delTx(this.getAttribute(&quot;data-delid&quot;))" style="background:none;border:none;padding:2px;font-size:11px;display:block;cursor:pointer">🗑</button>':'';
-  return '<div data-tid="'+esc(t.id)+'" onclick="openEditM(this.getAttribute(&quot;data-tid&quot;))" style="display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;padding:11px 16px;border-bottom:1px solid #F1F5F9;background:white;cursor:pointer">'
+  var del=t.id>1000?'<button onclick="delTx('+t.id+')" style="background:none;border:none;padding:2px;font-size:11px;display:block;cursor:pointer">🗑</button>':'';
+  return '<div style="display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;padding:11px 16px;border-bottom:1px solid #F1F5F9;background:white">'
     +'<div style="width:38px;height:38px;border-radius:12px;background:'+c+'20;display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;-webkit-box-pack:center;justify-content:center;margin-right:12px;-webkit-box-flex:0;flex-shrink:0;font-size:17px">'+ge(t.category)+'</div>'
     +'<div style="-webkit-box-flex:1;flex:1;min-width:0">'
     +'<div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.content+'</div>'
@@ -542,42 +534,17 @@ function renderSettings(){
 }
 
 // ── 모달 ──
-function fillModalOptions(cat,sub,method){
-  var cs=gi('fcat'),ckeys=Object.keys(CONFIG.categorySubs),h='';
-  for(var i=0;i<ckeys.length;i++){h+='<option value="'+esc(ckeys[i])+'">'+ge(ckeys[i])+' '+esc(ckeys[i])+'</option>';}
-  cs.innerHTML=h; cs.value=cat||'식비'; updSub();
-  if(sub)gi('fsub').value=sub;
-  var mh='';
-  for(var i=0;i<CONFIG.paymentMethods.length;i++){mh+='<option value="'+esc(CONFIG.paymentMethods[i])+'">'+esc(CONFIG.paymentMethods[i])+'</option>';}
-  gi('fmet').innerHTML=mh;
-  if(method)gi('fmet').value=method;
-}
-function setModalMode(editing){
-  gi('modalTitle').textContent=editing?'거래 수정':'거래 추가';
-  gi('saveTxBtn').textContent=editing?'✅ 수정 저장':'✅ 추가하기';
-  gi('deleteTxBtn').style.display=editing?'block':'none';
-}
 function openM(){
-  EDITING_TX=null;
-  setModalMode(false);
   var mm=CM<10?'0'+CM:''+CM;
   gi('fd').value=APP_YEAR+'-'+mm+'-01';
   gi('fcontent').value='';gi('fa').value='';
   setT('지출');
-  fillModalOptions('식비','','');
-  gi('modal').className='modal-bg open';
-}
-function openEditM(id){
-  var tx=allTx(), found=null;
-  for(var i=0;i<tx.length;i++){if(String(tx[i].id)===String(id)){found=tx[i];break;}}
-  if(!found)return;
-  EDITING_TX=found;
-  setModalMode(true);
-  gi('fd').value=found.date;
-  gi('fcontent').value=found.content;
-  gi('fa').value=found.amount;
-  setT(found.type||'지출');
-  fillModalOptions(found.category,found.sub,found.method);
+  var cs=gi('fcat'),ckeys=Object.keys(CONFIG.categorySubs),h='';
+  for(var i=0;i<ckeys.length;i++){h+='<option value="'+esc(ckeys[i])+'">'+ge(ckeys[i])+' '+esc(ckeys[i])+'</option>';}
+  cs.innerHTML=h; cs.value='식비'; updSub();
+  var ms=gi('fmet'),mh='';
+  for(var i=0;i<CONFIG.paymentMethods.length;i++){mh+='<option value="'+esc(CONFIG.paymentMethods[i])+'">'+esc(CONFIG.paymentMethods[i])+'</option>';}
+  gi('fmet').innerHTML=mh;
   gi('modal').className='modal-bg open';
 }
 function closeM(){gi('modal').className='modal-bg';}
@@ -606,32 +573,14 @@ function setSaveButtonSaving(on){
   btn.disabled=on;
   btn.style.opacity=on?'0.7':'1';
 }
-function findExtraIndex(id){
-  for(var i=0;i<extras.length;i++){if(String(extras[i].id)===String(id))return i;}
-  return -1;
-}
-function refreshAfterLocalEdit(message){
-  closeM();
-  EDITING_TX=null;
-  if(message)alert(message);
-  refreshVisible();
-}
 function addTx(){
   if(SAVING_TX)return;
-
   var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
-  var amount=parseInt(gi('fa').value)||0;
-
+  var amount=parseInt(gi('fa').value,10)||0;
   if(!content||!amount)return;
-
-  var date=gi('fd').value;
-  var editing=!!EDITING_TX;
+  var date=gi('fd').value||(''+APP_YEAR+'-'+(CM<10?'0'+CM:CM)+'-01');
+  var month=parseInt(String(date).slice(5,7),10)||CM;
   var tx={
-    id:editing?EDITING_TX.id:Date.now(),
-    sheetName:editing?EDITING_TX.sheetName:null,
-    section:editing?EDITING_TX.section:null,
-    rowNumber:editing?EDITING_TX.rowNumber:null,
-    no:editing?EDITING_TX.no:null,
     date:date,
     content:content,
     amount:amount,
@@ -639,158 +588,41 @@ function addTx(){
     sub:gi('fsub').value,
     method:gi('fmet').value,
     type:FT,
-    month:parseInt((date||'').slice(5,7),10)||CM,
-    memo:editing?(EDITING_TX.memo||''):''
+    month:month,
+    memo:''
   };
-
-  tx=normalizeTx(tx);
-
-  tx.sub=gi('fsub').value||'';
-  tx.method=gi('fmet').value||'';
-  tx.category=gi('fcat').value||tx.category;
-  tx.type=FT;
-  tx.sheetName=editing?EDITING_TX.sheetName:tx.sheetName;
-  tx.section=editing?EDITING_TX.section:tx.section;
-  tx.rowNumber=editing?EDITING_TX.rowNumber:tx.rowNumber;
-  tx.no=editing?EDITING_TX.no:tx.no;
-
-  function fallbackLocal(message){
-    if(editing){
-      var idx=findExtraIndex(tx.id);
-      if(idx>=0){
-        extras[idx]=tx;
-        try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
-        refreshAfterLocalEdit(message||'임시 저장 거래는 이 기기에서만 수정됩니다');
-      }else{
-        alert('시트 행 정보가 없어 수정할 수 없습니다');
-      }
-      return;
-    }
-    if(typeof saveLocalTx==='function'){
-      saveLocalTx(tx);
-    }else{
-      extras.push(tx);
-      try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
-      closeM();
-      refreshVisible();
-    }
-    if(message)alert(message);
-  }
-
-  if(editing&&(!tx.sheetName||!tx.rowNumber)){
-    fallbackLocal('임시 저장 거래는 이 기기에서만 수정됩니다');
+  if(!API_BASE_URL||typeof fetch!=='function'||typeof URLSearchParams!=='function'){
+    saveLocalTx(tx);
     return;
   }
-
-  if(!API_BASE_URL||typeof fetch!=='function'){
-    fallbackLocal('이 기기에만 임시 저장됨');
-    return;
-  }
-
-  var btn=gi('saveTxBtn');
-  var oldText=btn?btn.textContent:'';
-
   SAVING_TX=true;
-  if(btn){
-    btn.disabled=true;
-    btn.textContent='저장 중...';
-  }
-
-  var params=[
-    'action='+(editing?'updateTransaction':'addTransaction'),
-    'date='+encodeURIComponent(tx.date),
-    'content='+encodeURIComponent(tx.content),
-    'amount='+encodeURIComponent(tx.amount),
-    'category='+encodeURIComponent(tx.category),
-    'sub='+encodeURIComponent(tx.sub),
-    'method='+encodeURIComponent(tx.method),
-    'type='+encodeURIComponent(tx.type),
-    'month='+encodeURIComponent(tx.month),
-    'memo='+encodeURIComponent(tx.memo||'')
-  ];
-  if(editing){
-    params.splice(1,0,
-      'id='+encodeURIComponent(tx.id),
-      'sheetName='+encodeURIComponent(tx.sheetName),
-      'section='+encodeURIComponent(tx.section||''),
-      'rowNumber='+encodeURIComponent(tx.rowNumber),
-      'no='+encodeURIComponent(tx.no||'')
-    );
-  }
-
-  var url=API_BASE_URL+'?'+params.join('&');
-
-  fetch(url,{
-    method:'GET',
-    mode:'no-cors',
-    cache:'no-store'
+  setSaveButtonSaving(true);
+  fetch(API_BASE_URL, {
+    method:'POST',
+    body:new URLSearchParams({
+      action:'addTransaction',
+      payload:JSON.stringify(tx)
+    })
   })
-    .then(function(){
+    .then(function(res){return res.json();})
+    .then(function(data){
+      if(!data||data.ok!==true)throw new Error((data&&data.message)||'시트 저장 실패');
       closeM();
-      EDITING_TX=null;
-      alert(editing?'시트 수정 요청 완료':'시트 저장 요청 완료');
-
-      setTimeout(function(){
-        loadData();
-      },1500);
+      alert('시트에 저장됨');
+      loadData();
     })
     .catch(function(err){
-      console.warn('Google Sheets 거래 저장 요청 실패, localStorage에 임시 저장합니다.', err);
-      fallbackLocal((editing?'시트 수정 요청 실패: ':'시트 저장 요청 실패: ')+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
+      console.warn('Google Sheets 거래 저장 실패, localStorage에 임시 저장합니다.', err);
+      saveLocalTx(tx);
+      alert('시트 저장 실패, 이 기기에만 임시 저장됨');
     })
     .finally(function(){
       SAVING_TX=false;
-      if(btn){
-        btn.disabled=false;
-        btn.textContent=oldText||(editing?'✅ 수정 저장':'✅ 추가하기');
-      }
+      setSaveButtonSaving(false);
     });
 }
-function deleteEditingTx(){
-  if(!EDITING_TX)return;
-  if(!confirm('이 거래를 삭제할까요?'))return;
-  var tx=EDITING_TX;
-  if(!tx.sheetName||!tx.rowNumber){
-    var idx=findExtraIndex(tx.id);
-    if(idx>=0){
-      extras.splice(idx,1);
-      try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
-      refreshAfterLocalEdit('임시 저장 거래는 이 기기에서만 삭제됩니다');
-    }else{
-      alert('시트 행 정보가 없어 삭제할 수 없습니다');
-    }
-    return;
-  }
-  if(!API_BASE_URL||typeof fetch!=='function'){
-    alert('시트 삭제 요청 실패');
-    return;
-  }
-  var params=[
-    'action=deleteTransaction',
-    'sheetName='+encodeURIComponent(tx.sheetName),
-    'rowNumber='+encodeURIComponent(tx.rowNumber),
-    'month='+encodeURIComponent(tx.month),
-    'id='+encodeURIComponent(tx.id)
-  ];
-  fetch(API_BASE_URL+'?'+params.join('&'),{
-    method:'GET',
-    mode:'no-cors',
-    cache:'no-store'
-  })
-    .then(function(){
-      closeM();
-      EDITING_TX=null;
-      alert('시트 삭제 요청 완료');
-      setTimeout(function(){loadData();},1500);
-    })
-    .catch(function(err){
-      console.warn('Google Sheets 거래 삭제 요청 실패', err);
-      alert('시트 삭제 요청 실패');
-    });
-}
-
 function delTx(id){
-  var ne=[];for(var i=0;i<extras.length;i++){if(String(extras[i].id)!==String(id))ne.push(extras[i]);}
+  var ne=[];for(var i=0;i<extras.length;i++){if(extras[i].id!==id)ne.push(extras[i]);}
   extras=ne;
   try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
   renderHome();
