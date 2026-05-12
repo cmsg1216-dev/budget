@@ -372,6 +372,42 @@ function renderReserveRows(data){
   return h;
 }
 
+  function renderReserveExpenseRows(rows){
+  rows=rows||[];
+
+  if(!rows.length){
+    return '<div style="text-align:center;color:#94A3B8;padding:16px;font-size:13px">예비비 사용 내역 없음</div>';
+  }
+
+  var h='';
+
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i]||{};
+    var date=esc(r.date||'');
+    var content=esc(r.content||'');
+    var category=esc(r.category||'');
+    var amount=parseInt(r.amount,10)||0;
+
+    // 날짜/내용/금액이 없는 빈 행은 화면에서도 한 번 더 제외
+    if(!date||!content||!amount)continue;
+
+    h+='<div style="padding:10px 0;border-bottom:1px solid #F1F5F9">'
+      +'<div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;gap:10px;-webkit-box-align:start;align-items:flex-start">'
+      +'<div style="-webkit-box-flex:1;flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+content+'</div>'
+      +'<div style="font-size:11px;color:#64748B;margin-top:4px;display:-webkit-box;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<span>📅 '+date+'</span>'
+      +(category?'<span style="background:#F1F5F9;color:#475569;padding:1px 6px;border-radius:6px">🏷 '+category+'</span>':'')
+      +'</div>'
+      +'</div>'
+      +'<div style="font-size:13px;font-weight:800;color:#DC2626;white-space:nowrap">'+fmt(amount)+'</div>'
+      +'</div>'
+      +'</div>';
+  }
+
+  return h||'<div style="text-align:center;color:#94A3B8;padding:16px;font-size:13px">예비비 사용 내역 없음</div>';
+}
+
 function renderReserve(){
   updateConnectionStatus();
   updateReserveBadges();
@@ -380,7 +416,7 @@ function renderReserve(){
   var msg='<div style="text-align:center;color:#94A3B8;padding:16px;font-size:13px">예비비 상세 데이터 준비 중</div>';
   gi('reserveCategories').innerHTML=renderReserveRows(rd.categories)||msg;
   gi('reserveDeposits').innerHTML=renderReserveRows(rd.deposits)||msg;
-  gi('reserveExpenses').innerHTML=renderReserveRows(rd.expenses)||msg;
+  gi('reserveExpenses').innerHTML=renderReserveExpenseRows(rd.expenses)||msg;
 }
 
 // ── 탭 전환 ──
