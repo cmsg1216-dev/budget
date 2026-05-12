@@ -606,7 +606,7 @@ function addTx(){
   })
     .then(function(res){return res.json();})
     .then(function(data){
-      if(!data||data.ok!==true)throw new Error((data&&data.message)||'시트 저장 실패');
+if(!data||data.ok!==true)throw new Error((data&&(data.error||data.message))||'시트 저장 실패');
       closeM();
       alert('시트에 저장됨');
       loadData();
@@ -614,7 +614,7 @@ function addTx(){
     .catch(function(err){
       console.warn('Google Sheets 거래 저장 실패, localStorage에 임시 저장합니다.', err);
       saveLocalTx(tx);
-      alert('시트 저장 실패, 이 기기에만 임시 저장됨');
+alert('시트 저장 실패: '+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
     })
     .finally(function(){
       SAVING_TX=false;
