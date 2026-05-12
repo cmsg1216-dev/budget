@@ -158,7 +158,7 @@ button,input,select{font-family:inherit;cursor:pointer}
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📂 대분류</label><select id="fcat" class="fi" onchange="updSub()"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">🏷 소분류</label><select id="fsub" class="fi"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💳 지출방법</label><select id="fmet" class="fi"></select></div>
-    <button onclick="addTx()" style="width:100%;margin-top:18px;padding:15px;background:linear-gradient(135deg,#0F766E,#14B8A6);color:white;border:none;border-radius:16px;font-size:15px;font-weight:700">✅ 추가하기</button>
+    <button id="saveTxBtn" onclick="addTx()" style="width:100%;margin-top:18px;padding:15px;background:linear-gradient(135deg,#0F766E,#14B8A6);color:white;border:none;border-radius:16px;font-size:15px;font-weight:700">✅ 추가하기</button>
   </div>
 </div>
 
@@ -198,6 +198,7 @@ var CONFIG = {
 
 var CM=5, extras=[], AF={type:'전체',cat:'전체',method:'전체'}, FT='지출';
 var DATA_STATUS='loading';
+var SAVING_TX=false;
 var RESERVE_DATA={summary:null,categories:[],deposits:[],expenses:[]};
 var BTX = loadData();
 try{
@@ -557,17 +558,68 @@ function updSub(){
   for(var i=0;i<subs.length;i++){h+='<option value="'+esc(subs[i])+'">'+esc(subs[i])+'</option>';}
   gi('fsub').innerHTML=h;
 }
-function addTx(){
-  var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
-  var amount=parseInt(gi('fa').value)||0;
-  if(!content||!amount)return;
-  var tx=normalizeTx({id:Date.now(),date:gi('fd').value,content:content,amount:amount,
-    category:gi('fcat').value,sub:gi('fsub').value,
-    method:gi('fmet').value,type:FT});
-  extras.push(tx);
+function saveLocalTx(tx){
+  var localTx=normalizeTx({id:Date.now(),date:tx.date,content:tx.content,amount:tx.amount,
+    category:tx.category,sub:tx.sub,method:tx.method,type:tx.type,month:tx.month});
+  extras.push(localTx);
   try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
-  closeM(); renderHome();
-  if(gi('p-list').style.display!=='none')renderList();
+  closeM();
+  refreshVisible();
+}
+function setSaveButtonSaving(on){
+  var btn=gi('saveTxBtn');
+  if(!btn)return;
+  btn.textContent=on?'저장 중...':'✅ 추가하기';
+  btn.disabled=on;
+  btn.style.opacity=on?'0.7':'1';
+}
+function addTx(){
+  if(SAVING_TX)return;
+  var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
+  var amount=parseInt(gi('fa').value,10)||0;
+  if(!content||!amount)return;
+  var date=gi('fd').value||(''+APP_YEAR+'-'+(CM<10?'0'+CM:CM)+'-01');
+  var month=parseInt(String(date).slice(5,7),10)||CM;
+  var tx={
+    date:date,
+    content:content,
+    amount:amount,
+    category:gi('fcat').value,
+    sub:gi('fsub').value,
+    method:gi('fmet').value,
+    type:FT,
+    month:month,
+    memo:''
+  };
+  if(!API_BASE_URL||typeof fetch!=='function'||typeof URLSearchParams!=='function'){
+    saveLocalTx(tx);
+    return;
+  }
+  SAVING_TX=true;
+  setSaveButtonSaving(true);
+  fetch(API_BASE_URL, {
+    method:'POST',
+    body:new URLSearchParams({
+      action:'addTransaction',
+      payload:JSON.stringify(tx)
+    })
+  })
+    .then(function(res){return res.json();})
+    .then(function(data){
+      if(!data||data.ok!==true)throw new Error((data&&data.message)||'시트 저장 실패');
+      closeM();
+      alert('시트에 저장됨');
+      loadData();
+    })
+    .catch(function(err){
+      console.warn('Google Sheets 거래 저장 실패, localStorage에 임시 저장합니다.', err);
+      saveLocalTx(tx);
+      alert('시트 저장 실패, 이 기기에만 임시 저장됨');
+    })
+    .finally(function(){
+      SAVING_TX=false;
+      setSaveButtonSaving(false);
+    });
 }
 function delTx(id){
   var ne=[];for(var i=0;i<extras.length;i++){if(extras[i].id!==id)ne.push(extras[i]);}
