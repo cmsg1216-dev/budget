@@ -575,12 +575,15 @@ function setSaveButtonSaving(on){
 }
 function addTx(){
   if(SAVING_TX)return;
+
   var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
-  var amount=parseInt(gi('fa').value,10)||0;
+  var amount=parseInt(gi('fa').value)||0;
+
   if(!content||!amount)return;
-  var date=gi('fd').value||(''+APP_YEAR+'-'+(CM<10?'0'+CM:CM)+'-01');
-  var month=parseInt(String(date).slice(5,7),10)||CM;
+
+  var date=gi('fd').value;
   var tx={
+    id:Date.now(),
     date:date,
     content:content,
     amount:amount,
@@ -588,39 +591,79 @@ function addTx(){
     sub:gi('fsub').value,
     method:gi('fmet').value,
     type:FT,
-    month:month,
+    month:parseInt((date||'').slice(5,7),10)||CM,
     memo:''
   };
-  if(!API_BASE_URL||typeof fetch!=='function'||typeof URLSearchParams!=='function'){
-    saveLocalTx(tx);
+
+  tx=normalizeTx(tx);
+  tx.sub=gi('fsub').value||tx.sub||'';
+  tx.method=gi('fmet').value||tx.method||'';
+
+  function fallbackLocal(message){
+    if(typeof saveLocalTx==='function'){
+      saveLocalTx(tx);
+    }else{
+      extras.push(tx);
+      try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
+    }
+
+    if(message)alert(message);
+    renderHome();
+    if(gi('p-list').style.display!=='none')renderList();
+  }
+
+  if(!API_BASE_URL||typeof fetch!=='function'){
+    closeM();
+    fallbackLocal('이 기기에만 임시 저장됨');
     return;
   }
+
+  var btn=gi('saveTxBtn');
+  var oldText=btn?btn.textContent:'';
+
   SAVING_TX=true;
-  setSaveButtonSaving(true);
-  fetch(API_BASE_URL, {
-    method:'POST',
-    body:new URLSearchParams({
-      action:'addTransaction',
-      payload:JSON.stringify(tx)
-    })
-  })
-    .then(function(res){return res.json();})
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='저장 중...';
+  }
+
+  var url=API_BASE_URL
+    +'?action=addTransaction'
+    +'&payload='+encodeURIComponent(JSON.stringify(tx));
+
+  var timeout=new Promise(function(_,reject){
+    setTimeout(function(){
+      reject(new Error('저장 요청 시간 초과'));
+    },25000);
+  });
+
+  Promise.race([
+    fetch(url).then(function(res){
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      return res.json();
+    }),
+    timeout
+  ])
     .then(function(data){
-if(!data||data.ok!==true)throw new Error((data&&(data.error||data.message))||'시트 저장 실패');
+      if(!data||data.ok!==true)throw new Error((data&&(data.error||data.message))||'시트 저장 실패');
       closeM();
       alert('시트에 저장됨');
       loadData();
     })
     .catch(function(err){
       console.warn('Google Sheets 거래 저장 실패, localStorage에 임시 저장합니다.', err);
-      saveLocalTx(tx);
-alert('시트 저장 실패: '+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
+      closeM();
+      fallbackLocal('시트 저장 실패: '+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
     })
     .finally(function(){
       SAVING_TX=false;
-      setSaveButtonSaving(false);
+      if(btn){
+        btn.disabled=false;
+        btn.textContent=oldText||'✅ 추가하기';
+      }
     });
 }
+  
 function delTx(id){
   var ne=[];for(var i=0;i<extras.length;i++){if(extras[i].id!==id)ne.push(extras[i]);}
   extras=ne;
