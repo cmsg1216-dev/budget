@@ -573,7 +573,6 @@ function setSaveButtonSaving(on){
   btn.disabled=on;
   btn.style.opacity=on?'0.7':'1';
 }
-
 function addTx(){
   if(SAVING_TX)return;
 
@@ -598,7 +597,6 @@ function addTx(){
 
   tx=normalizeTx(tx);
 
-  // normalizeTx 이후에도 소분류/지출방법을 화면 선택값으로 다시 고정
   tx.sub=gi('fsub').value||'';
   tx.method=gi('fmet').value||'';
   tx.category=gi('fcat').value||tx.category;
@@ -656,7 +654,6 @@ function addTx(){
       closeM();
       alert('시트 저장 요청 완료');
 
-      // Apps Script가 시트에 쓰는 시간을 조금 기다린 뒤 다시 읽기
       setTimeout(function(){
         loadData();
       },1500);
@@ -674,8 +671,6 @@ function addTx(){
     });
 }
 
-  
-  
 function delTx(id){
   var ne=[];for(var i=0;i<extras.length;i++){if(extras[i].id!==id)ne.push(extras[i]);}
   extras=ne;
