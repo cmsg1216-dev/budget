@@ -612,7 +612,7 @@ function addTx(){
     if(gi('p-list').style.display!=='none')renderList();
   }
 
-  if(!API_BASE_URL||typeof fetch!=='function'){
+  if(!API_BASE_URL){
     closeM();
     fallbackLocal('이 기기에만 임시 저장됨');
     return;
@@ -627,41 +627,78 @@ function addTx(){
     btn.textContent='저장 중...';
   }
 
-  var url=API_BASE_URL
-    +'?action=addTransaction'
-    +'&payload='+encodeURIComponent(JSON.stringify(tx));
+  var cbName='budgetSaveCallback_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+  var script=document.createElement('script');
+  var done=false;
 
-  var timeout=new Promise(function(_,reject){
+  function finish(){
+    if(done)return;
+    done=true;
+    SAVING_TX=false;
+
+    if(btn){
+      btn.disabled=false;
+      btn.textContent=oldText||'✅ 추가하기';
+    }
+
+    try{
+      if(script&&script.parentNode)script.parentNode.removeChild(script);
+    }catch(e){}
+
+    try{
+      delete window[cbName];
+    }catch(e){
+      window[cbName]=undefined;
+    }
+  }
+
+  window[cbName]=function(data){
+    finish();
+
+    if(!data||data.ok!==true){
+      var msg=(data&&(data.error||data.message))||'시트 저장 실패';
+      closeM();
+      fallbackLocal('시트 저장 실패: '+msg+'\n이 기기에만 임시 저장됨');
+      return;
+    }
+
+    closeM();
+    alert('시트에 저장됨');
+
     setTimeout(function(){
-      reject(new Error('저장 요청 시간 초과'));
-    },25000);
-  });
-
-  Promise.race([
-    fetch(url).then(function(res){
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      return res.json();
-    }),
-    timeout
-  ])
-    .then(function(data){
-      if(!data||data.ok!==true)throw new Error((data&&(data.error||data.message))||'시트 저장 실패');
-      closeM();
-      alert('시트에 저장됨');
       loadData();
-    })
-    .catch(function(err){
-      console.warn('Google Sheets 거래 저장 실패, localStorage에 임시 저장합니다.', err);
-      closeM();
-      fallbackLocal('시트 저장 실패: '+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
-    })
-    .finally(function(){
-      SAVING_TX=false;
-      if(btn){
-        btn.disabled=false;
-        btn.textContent=oldText||'✅ 추가하기';
-      }
-    });
+    },800);
+  };
+
+  var params=[
+    'action=addTransaction',
+    'callback='+encodeURIComponent(cbName),
+    'date='+encodeURIComponent(tx.date),
+    'content='+encodeURIComponent(tx.content),
+    'amount='+encodeURIComponent(tx.amount),
+    'category='+encodeURIComponent(tx.category),
+    'sub='+encodeURIComponent(tx.sub),
+    'method='+encodeURIComponent(tx.method),
+    'type='+encodeURIComponent(tx.type),
+    'month='+encodeURIComponent(tx.month),
+    'memo='+encodeURIComponent(tx.memo||'')
+  ];
+
+  script.onerror=function(){
+    finish();
+    closeM();
+    fallbackLocal('시트 저장 실패: JSONP 요청 실패\n이 기기에만 임시 저장됨');
+  };
+
+  script.src=API_BASE_URL+'?'+params.join('&');
+  document.body.appendChild(script);
+
+  setTimeout(function(){
+    if(done)return;
+    finish();
+    closeM();
+    fallbackLocal('시트 저장 실패: 저장 요청 시간 초과\n이 기기에만 임시 저장됨');
+  },25000);
 }
   
 function delTx(id){
