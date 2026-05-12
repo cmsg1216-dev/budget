@@ -573,6 +573,7 @@ function setSaveButtonSaving(on){
   btn.disabled=on;
   btn.style.opacity=on?'0.7':'1';
 }
+
 function addTx(){
   if(SAVING_TX)return;
 
@@ -596,8 +597,12 @@ function addTx(){
   };
 
   tx=normalizeTx(tx);
-  tx.sub=gi('fsub').value||tx.sub||'';
-  tx.method=gi('fmet').value||tx.method||'';
+
+  // normalizeTx 이후에도 소분류/지출방법을 화면 선택값으로 다시 고정
+  tx.sub=gi('fsub').value||'';
+  tx.method=gi('fmet').value||'';
+  tx.category=gi('fcat').value||tx.category;
+  tx.type=FT;
 
   function fallbackLocal(message){
     if(typeof saveLocalTx==='function'){
@@ -607,13 +612,13 @@ function addTx(){
       try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
     }
 
+    closeM();
     if(message)alert(message);
     renderHome();
     if(gi('p-list').style.display!=='none')renderList();
   }
 
-  if(!API_BASE_URL){
-    closeM();
+  if(!API_BASE_URL||typeof fetch!=='function'){
     fallbackLocal('이 기기에만 임시 저장됨');
     return;
   }
@@ -627,52 +632,8 @@ function addTx(){
     btn.textContent='저장 중...';
   }
 
-  var cbName='budgetSaveCallback_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  var script=document.createElement('script');
-  var done=false;
-
-  function finish(){
-    if(done)return;
-    done=true;
-    SAVING_TX=false;
-
-    if(btn){
-      btn.disabled=false;
-      btn.textContent=oldText||'✅ 추가하기';
-    }
-
-    try{
-      if(script&&script.parentNode)script.parentNode.removeChild(script);
-    }catch(e){}
-
-    try{
-      delete window[cbName];
-    }catch(e){
-      window[cbName]=undefined;
-    }
-  }
-
-  window[cbName]=function(data){
-    finish();
-
-    if(!data||data.ok!==true){
-      var msg=(data&&(data.error||data.message))||'시트 저장 실패';
-      closeM();
-      fallbackLocal('시트 저장 실패: '+msg+'\n이 기기에만 임시 저장됨');
-      return;
-    }
-
-    closeM();
-    alert('시트에 저장됨');
-
-    setTimeout(function(){
-      loadData();
-    },800);
-  };
-
   var params=[
     'action=addTransaction',
-    'callback='+encodeURIComponent(cbName),
     'date='+encodeURIComponent(tx.date),
     'content='+encodeURIComponent(tx.content),
     'amount='+encodeURIComponent(tx.amount),
@@ -684,22 +645,36 @@ function addTx(){
     'memo='+encodeURIComponent(tx.memo||'')
   ];
 
-  script.onerror=function(){
-    finish();
-    closeM();
-    fallbackLocal('시트 저장 실패: JSONP 요청 실패\n이 기기에만 임시 저장됨');
-  };
+  var url=API_BASE_URL+'?'+params.join('&');
 
-  script.src=API_BASE_URL+'?'+params.join('&');
-  document.body.appendChild(script);
+  fetch(url,{
+    method:'GET',
+    mode:'no-cors',
+    cache:'no-store'
+  })
+    .then(function(){
+      closeM();
+      alert('시트 저장 요청 완료');
 
-  setTimeout(function(){
-    if(done)return;
-    finish();
-    closeM();
-    fallbackLocal('시트 저장 실패: 저장 요청 시간 초과\n이 기기에만 임시 저장됨');
-  },25000);
+      // Apps Script가 시트에 쓰는 시간을 조금 기다린 뒤 다시 읽기
+      setTimeout(function(){
+        loadData();
+      },1500);
+    })
+    .catch(function(err){
+      console.warn('Google Sheets 거래 저장 요청 실패, localStorage에 임시 저장합니다.', err);
+      fallbackLocal('시트 저장 요청 실패: '+(err&&err.message?err.message:err)+'\n이 기기에만 임시 저장됨');
+    })
+    .finally(function(){
+      SAVING_TX=false;
+      if(btn){
+        btn.disabled=false;
+        btn.textContent=oldText||'✅ 추가하기';
+      }
+    });
 }
+
+  
   
 function delTx(id){
   var ne=[];for(var i=0;i<extras.length;i++){if(extras[i].id!==id)ne.push(extras[i]);}
