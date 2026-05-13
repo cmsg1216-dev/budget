@@ -154,7 +154,7 @@ button,input,select{font-family:inherit;cursor:pointer}
     </div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📅 날짜</label><input type="date" id="fd" class="fi"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">✏️ 내용</label><input type="text" id="fcontent" placeholder="예) 마트 장보기" class="fi"></div>
-    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💰 금액 (원)</label><input type="number" id="fa" placeholder="0" class="fi"></div>
+    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💰 금액 (원)</label><input type="text" id="fa" inputmode="numeric" pattern="[0-9,]*" placeholder="0" class="fi" oninput="formatAmountInput(this)"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">📂 대분류</label><select id="fcat" class="fi" onchange="updSub()"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">🏷 소분류</label><select id="fsub" class="fi"></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#64748B;display:block">💳 지출방법</label><select id="fmet" class="fi"></select></div>
@@ -334,6 +334,10 @@ function computeMonthlySummary(tx){
 // ── 유틸 ──
 function allTx(){var tx=BTX.concat(extras), out=[];for(var i=0;i<tx.length;i++)out.push(normalizeTx(tx[i]));return out;}
 function fmt(n){return (n||0).toLocaleString('ko-KR')+'원';}
+function onlyDigits(v){return String(v||'').replace(/[^0-9]/g,'');}
+function parseMoneyInput(v){var n=onlyDigits(v);return parseInt(n,10)||0;}
+function formatMoneyValue(v){var n=onlyDigits(v);if(!n)return '';return parseInt(n,10).toLocaleString('ko-KR');}
+function formatAmountInput(el){if(!el)return;var before=el.value;var formatted=formatMoneyValue(before);el.value=formatted;}
 function gc(k){return CONFIG.categoryColors[k]||'#94A3B8';}
 function ge(k){return CONFIG.categoryEmojis[k]||'📌';}
 function gi(id){return document.getElementById(id);}
@@ -582,7 +586,7 @@ function openEditM(id){
   setModalMode(true);
   gi('fd').value=EDITING_TX.date;
   gi('fcontent').value=EDITING_TX.content;
-  gi('fa').value=EDITING_TX.amount;
+  gi('fa').value=formatMoneyValue(EDITING_TX.amount);
   setT(EDITING_TX.type||'지출');
   fillModalOptions(EDITING_TX.category,EDITING_TX.sub,EDITING_TX.method);
   gi('modal').className='modal-bg open';
@@ -627,7 +631,7 @@ function addTx(){
   if(SAVING_TX)return;
 
   var content=gi('fcontent').value.replace(/^\s+|\s+$/g,'');
-  var amount=parseInt(gi('fa').value)||0;
+  var amount=parseMoneyInput(gi('fa').value);
 
   if(!content||!amount)return;
 
