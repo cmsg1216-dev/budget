@@ -298,10 +298,10 @@ function normalizeTx(src){
     method:isArr?src[6]:src.method,
     month:isArr?src[7]:(src.month||src.sheetName),
     type:isArr?null:src.type,
-    sheetName:isArr?null:src.sheetName,
+    sheetName:isArr?null:(src.sheetName||src.sheet),
     section:isArr?null:src.section,
-    rowNumber:isArr?null:src.rowNumber,
-    no:isArr?null:src.no,
+    rowNumber:isArr?null:(src.rowNumber||src.row||src.rowIndex),
+    no:isArr?null:(src.no!=null?src.no:src.No),
     memo:isArr?'':src.memo
   };
   t.id=t.id||Date.now();
@@ -571,13 +571,20 @@ function openEditM(id){
   var tx=allTx(), found=null;
   for(var i=0;i<tx.length;i++){if(String(tx[i].id)===String(id)){found=tx[i];break;}}
   if(!found)return;
-  EDITING_TX=found;
+  EDITING_TX=normalizeTx(found);
+  EDITING_TX.id=found.id;
+  EDITING_TX.sheetName=found.sheetName||EDITING_TX.sheetName;
+  EDITING_TX.section=found.section||EDITING_TX.section;
+  EDITING_TX.rowNumber=found.rowNumber||EDITING_TX.rowNumber;
+  EDITING_TX.no=found.no!=null?found.no:EDITING_TX.no;
+  EDITING_TX.month=found.month||EDITING_TX.month;
+  EDITING_TX.memo=found.memo||'';
   setModalMode(true);
-  gi('fd').value=found.date;
-  gi('fcontent').value=found.content;
-  gi('fa').value=found.amount;
-  setT(found.type||'지출');
-  fillModalOptions(found.category,found.sub,found.method);
+  gi('fd').value=EDITING_TX.date;
+  gi('fcontent').value=EDITING_TX.content;
+  gi('fa').value=EDITING_TX.amount;
+  setT(EDITING_TX.type||'지출');
+  fillModalOptions(EDITING_TX.category,EDITING_TX.sub,EDITING_TX.method);
   gi('modal').className='modal-bg open';
 }
 function closeM(){gi('modal').className='modal-bg';}
@@ -678,7 +685,7 @@ function addTx(){
   }
 
   if(editing&&(!tx.sheetName||!tx.rowNumber)){
-    fallbackLocal('임시 저장 거래는 이 기기에서만 수정됩니다');
+    alert('시트 행 정보가 없어 수정할 수 없습니다. 새로고침 후 다시 시도해주세요.');
     return;
   }
 
@@ -719,6 +726,7 @@ function addTx(){
   }
 
   var url=API_BASE_URL+'?'+params.join('&');
+  if(editing)console.log('update tx target', EDITING_TX.sheetName, EDITING_TX.rowNumber, url);
 
   fetch(url,{
     method:'GET',
@@ -751,14 +759,7 @@ function deleteEditingTx(){
   if(!confirm('이 거래를 삭제할까요?'))return;
   var tx=EDITING_TX;
   if(!tx.sheetName||!tx.rowNumber){
-    var idx=findExtraIndex(tx.id);
-    if(idx>=0){
-      extras.splice(idx,1);
-      try{localStorage.setItem('bgt5',JSON.stringify(extras));}catch(e){}
-      refreshAfterLocalEdit('임시 저장 거래는 이 기기에서만 삭제됩니다');
-    }else{
-      alert('시트 행 정보가 없어 삭제할 수 없습니다');
-    }
+    alert('시트 행 정보가 없어 삭제할 수 없습니다. 새로고침 후 다시 시도해주세요.');
     return;
   }
   if(!API_BASE_URL||typeof fetch!=='function'){
