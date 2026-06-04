@@ -110,7 +110,7 @@ button,input,select{font-family:inherit;cursor:pointer}
       <span><span style="display:inline-block;width:8px;height:8px;background:#3B82F6;border-radius:2px;margin-right:3px"></span>저축</span>
     </div>
   </div>
-  <div class="card"><div class="ct">카테고리별 지출 합계</div><div id="cs"></div></div>
+  <div class="card"><div id="csTitle" class="ct">5월 카테고리별 지출</div><div id="cs"></div></div>
 </div>
 
 <!-- 설정 -->
@@ -513,20 +513,29 @@ function renderStats(){
   for(var m=MIN_MONTH;m<=MAX_MONTH;m++){
     var s=monthly[m]||{i:0,e:0,s:0};
     var ih=maxV?Math.round(s.i/maxV*100):0,eh=maxV?Math.round(s.e/maxV*100):0,sh=maxV?Math.round(s.s/maxV*100):0;
-    bh+='<div style="-webkit-box-flex:1;flex:1;display:-webkit-box;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;flex-direction:column;-webkit-box-align:center;align-items:center">'
+    var on=m===CM;
+    bh+='<div style="-webkit-box-flex:1;flex:1;display:-webkit-box;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;flex-direction:column;-webkit-box-align:center;align-items:center;padding:4px 3px;border-radius:10px;'+(on?'background:#ECFDF5;':'')+'">'
       +'<div style="display:-webkit-box;display:flex;-webkit-box-align:end;align-items:flex-end;height:100px;gap:2px;-webkit-box-pack:center;justify-content:center">'
       +'<div style="width:9px;height:'+ih+'px;background:#10B981;border-radius:2px 2px 0 0"></div>'
       +'<div style="width:9px;height:'+eh+'px;background:#EF4444;border-radius:2px 2px 0 0"></div>'
       +'<div style="width:9px;height:'+sh+'px;background:#3B82F6;border-radius:2px 2px 0 0"></div>'
-      +'</div><div style="font-size:10px;color:#64748B;margin-top:4px">'+m+'월</div></div>';
+      +'</div><div style="font-size:10px;color:'+(on?'#0D9488':'#64748B')+';font-weight:'+(on?'800':'500')+';margin-top:4px">'+m+'월</div>'
+      +'<div style="width:16px;height:3px;background:'+(on?'#0D9488':'transparent')+';border-radius:3px;margin-top:3px"></div></div>';
   }
   gi('bc').innerHTML=bh;
+  if(gi('csTitle'))gi('csTitle').textContent=CM+'월 카테고리별 지출';
   var tx=allTx();
-  var cm={};for(var i=0;i<tx.length;i++){var t=tx[i];if(t.type==='지출'&&t.amount>0)cm[t.category]=(cm[t.category]||0)+t.amount;}
+  var cm={};
+  for(var i=0;i<tx.length;i++){
+    var t=tx[i];
+    if(t.month!==CM)continue;
+    if(t.type==='지출'&&t.amount>0)cm[t.category]=(cm[t.category]||0)+t.amount;
+  }
   var sorted=sortDesc(objArr(cm));
   var tot=0;for(var i=0;i<sorted.length;i++)tot+=sorted[i][1];
+  if(tot===0){gi('cs').innerHTML='<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">이달 지출 내역 없음</div>';return;}
   var ch='';
-  for(var i=0;i<sorted.length;i++){var cat=sorted[i][0],amt=sorted[i][1],p=Math.round(amt/tot*100);ch+='<div style="margin-bottom:10px"><div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:#1E293B">'+ge(cat)+' '+cat+'</span><span style="font-size:11px;color:#64748B">'+fmt(amt)+' ('+p+'%)</span></div><div style="height:5px;background:#F1F5F9;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:'+gc(cat)+';border-radius:3px"></div></div></div>';}
+  for(var i=0;i<sorted.length;i++){var cat=sorted[i][0],amt=sorted[i][1],p=tot?Math.round(amt/tot*100):0;ch+='<div style="margin-bottom:10px"><div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:#1E293B">'+ge(cat)+' '+cat+'</span><span style="font-size:11px;color:#64748B">'+fmt(amt)+' ('+p+'%)</span></div><div style="height:5px;background:#F1F5F9;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:'+gc(cat)+';border-radius:3px"></div></div></div>';}
   gi('cs').innerHTML=ch;
 }
 
