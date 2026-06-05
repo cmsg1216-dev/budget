@@ -100,7 +100,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 </div>
 
 <!-- 통계 -->
-<div id="p-stats" style="display:none;padding-bottom:80px">
+<div id="p-stats" style="display:none;padding-bottom:150px">
   <div class="card">
     <div class="ct">월별 현황 (1~12월)</div>
     <div id="bc" style="display:-webkit-box;display:flex;-webkit-box-align:end;align-items:flex-end;height:120px;gap:4px;padding:0 8px;overflow-x:auto"></div>
@@ -522,7 +522,7 @@ function renderBudgetStatus(){
     return;
   }
   function num(v){return Number(String(v==null?0:v).replace(/,/g,''))||0;}
-  var html='', shown=0;
+  var items=[];
   for(var i=0;i<cats.length;i++){
     var c=cats[i]||{};
     var budget=num(c.budget);
@@ -530,21 +530,41 @@ function renderBudgetStatus(){
     var spent=num(c.spent);
     var diff=budget-spent;
     var rate=c.rate!=null?num(c.rate):(budget?spent/budget*100:0);
+    items.push({category:c.category||'기타',budget:budget,spent:spent,diff:diff,rate:rate});
+  }
+  items.sort(function(a,b){
+    var ao=a.diff<0,bo=b.diff<0;
+    if(ao!==bo)return ao?-1:1;
+    if(ao&&bo)return Math.abs(b.diff)-Math.abs(a.diff);
+    if(b.rate!==a.rate)return b.rate-a.rate;
+    return b.budget-a.budget;
+  });
+  var html='';
+  for(var i=0;i<items.length;i++){
+    var c=items[i];
+    var diff=c.diff, rate=c.rate;
     var width=Math.max(0,Math.min(rate,100));
-    var color=diff<0?'#DC2626':(rate>=90?'#F97316':'#0D9488');
-    var bg=diff<0?'#FEE2E2':(rate>=90?'#FFEDD5':'#CCFBF1');
-    var diffText=diff<0?fmt(Math.abs(diff))+' 초과':fmt(diff)+' 남음';
+    var color=diff<0?'#DC2626':(diff===0||rate>=90&&diff>0?'#F97316':'#0D9488');
+    var bg=diff<0?'#FEE2E2':(diff===0||rate>=90&&diff>0?'#FFEDD5':'#CCFBF1');
+    var diffText=diff<0?fmt(Math.abs(diff))+' 초과':(diff===0?'예산 소진':fmt(diff)+' 남음');
+    var badgeText='';
+    if(diff<0){
+      if(rate>=300)badgeText='심각 초과';
+      else if(rate>=200)badgeText='매우 초과';
+      else if(rate>=120)badgeText='초과';
+      else if(rate>100)badgeText='주의 초과';
+    }
+    var badge=badgeText?'<span style="padding:2px 6px;border-radius:999px;background:'+bg+';color:'+color+';font-size:9px;font-weight:800;white-space:nowrap">'+badgeText+'</span>':'';
     html+='<div style="margin-bottom:12px">'
-      +'<div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;gap:8px;margin-bottom:4px">'
-      +'<span style="font-size:12px;font-weight:800;color:#1E293B">'+esc(c.category||'기타')+'</span>'
-      +'<span style="font-size:11px;font-weight:800;color:'+color+'">'+Math.round(rate)+'%</span></div>'
-      +'<div style="font-size:12px;color:#475569;margin-bottom:3px">'+fmt(spent)+' / '+fmt(budget)+'</div>'
+      +'<div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;-webkit-box-align:center;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:12px;font-weight:800;color:#1E293B;-webkit-box-flex:1;flex:1;min-width:0">'+esc(c.category)+'</span>'
+      +'<span style="display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;-webkit-box-pack:end;justify-content:flex-end;gap:4px;flex-wrap:wrap;text-align:right"><span style="font-size:11px;font-weight:800;color:'+color+'">'+Math.round(rate)+'%</span>'+badge+'</span></div>'
+      +'<div style="font-size:12px;color:#475569;margin-bottom:3px">'+fmt(c.spent)+' / '+fmt(c.budget)+'</div>'
       +'<div style="font-size:11px;font-weight:700;color:'+color+';margin-bottom:6px">'+diffText+' · '+Math.round(rate)+'%</div>'
       +'<div style="height:7px;background:'+bg+';border-radius:999px;overflow:hidden">'
       +'<div style="height:100%;width:'+width+'%;background:'+color+';border-radius:999px"></div></div></div>';
-    shown++;
   }
-  box.innerHTML=shown?html:'<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">이달 예산 데이터 없음</div>';
+  box.innerHTML=items.length?html:'<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">이달 예산 데이터 없음</div>';
 }
 
 function renderStats(){
