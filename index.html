@@ -110,6 +110,10 @@ button,input,select{font-family:inherit;cursor:pointer}
       <span><span style="display:inline-block;width:8px;height:8px;background:#3B82F6;border-radius:2px;margin-right:3px"></span>저축</span>
     </div>
   </div>
+  <div class="card">
+    <div id="budgetStatusTitle" class="ct">5월 예산 대비 현황</div>
+    <div id="budgetStatus"></div>
+  </div>
   <div class="card"><div id="csTitle" class="ct">5월 카테고리별 지출</div><div id="cs"></div></div>
 </div>
 
@@ -202,6 +206,7 @@ var DATA_STATUS='loading';
 var SAVING_TX=false;
 var EDITING_TX=null;
 var RESERVE_DATA={summary:null,categories:[],deposits:[],expenses:[]};
+var BUDGETS = {};
 var BTX = loadData();
 try{
   var _s=localStorage.getItem('bgt5');
@@ -238,6 +243,7 @@ function loadData(){
       if(data&&data.ok===false)throw new Error(data.error||'API 응답 오류');
       applyConfig(data&&data.config);
       if(data&&data.reserve)RESERVE_DATA=normalizeReserve(data.reserve);
+      if(data&&data.budgets)BUDGETS=data.budgets;
       var rows=data&&data.transactions?data.transactions:data;
       BTX=normalizeRows(rows);
       DATA_STATUS='connected';
@@ -505,7 +511,44 @@ function renderList(){
 function setF(k,v){AF[k]=v;renderList();}
 
 // ── 통계 렌더 ──
+function renderBudgetStatus(){
+  var title=gi('budgetStatusTitle'), box=gi('budgetStatus');
+  if(!box)return;
+  if(title)title.textContent=CM+'월 예산 대비 현황';
+  var monthBudget=BUDGETS[String(CM)]||BUDGETS[CM];
+  var cats=monthBudget&&monthBudget.categories?monthBudget.categories:[];
+  if(!cats||cats.length===0){
+    box.innerHTML='<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">이달 예산 데이터 없음</div>';
+    return;
+  }
+  function num(v){return Number(String(v==null?0:v).replace(/,/g,''))||0;}
+  var html='', shown=0;
+  for(var i=0;i<cats.length;i++){
+    var c=cats[i]||{};
+    var budget=num(c.budget);
+    if(budget===0)continue;
+    var spent=num(c.spent);
+    var diff=budget-spent;
+    var rate=c.rate!=null?num(c.rate):(budget?spent/budget*100:0);
+    var width=Math.max(0,Math.min(rate,100));
+    var color=diff<0?'#DC2626':(rate>=90?'#F97316':'#0D9488');
+    var bg=diff<0?'#FEE2E2':(rate>=90?'#FFEDD5':'#CCFBF1');
+    var diffText=diff<0?fmt(Math.abs(diff))+' 초과':fmt(diff)+' 남음';
+    html+='<div style="margin-bottom:12px">'
+      +'<div style="display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:12px;font-weight:800;color:#1E293B">'+esc(c.category||'기타')+'</span>'
+      +'<span style="font-size:11px;font-weight:800;color:'+color+'">'+Math.round(rate)+'%</span></div>'
+      +'<div style="font-size:12px;color:#475569;margin-bottom:3px">'+fmt(spent)+' / '+fmt(budget)+'</div>'
+      +'<div style="font-size:11px;font-weight:700;color:'+color+';margin-bottom:6px">'+diffText+' · '+Math.round(rate)+'%</div>'
+      +'<div style="height:7px;background:'+bg+';border-radius:999px;overflow:hidden">'
+      +'<div style="height:100%;width:'+width+'%;background:'+color+';border-radius:999px"></div></div></div>';
+    shown++;
+  }
+  box.innerHTML=shown?html:'<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">이달 예산 데이터 없음</div>';
+}
+
 function renderStats(){
+  renderBudgetStatus();
   var maxV=0;
   var monthly=computeMonthlySummary(allTx());
   for(var m=MIN_MONTH;m<=MAX_MONTH;m++){var s=monthly[m]||{i:0,e:0,s:0};if(s.i>maxV)maxV=s.i;if(s.e>maxV)maxV=s.e;if(s.s>maxV)maxV=s.s;}
