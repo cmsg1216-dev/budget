@@ -176,6 +176,8 @@ button,input,select{font-family:inherit;cursor:pointer}
       <span id="budgetEditorTitle" style="font-size:17px;font-weight:700;color:#1E293B">예산 수정</span>
       <button onclick="closeBudgetModal()" style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 10px;font-size:16px">✕</button>
     </div>
+    <button id="budgetPrevBtn" onclick="loadPreviousBudget()" style="width:100%;margin-bottom:10px;padding:11px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;font-size:13px;font-weight:800;color:#0D9488">전월 예산 불러오기</button>
+    <div id="budgetEditorStatus" style="display:none;margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#ECFDF5;color:#0D9488;font-size:12px;font-weight:800;text-align:center"></div>
     <div id="budgetEditorList"></div>
     <button id="budgetSaveBtn" onclick="saveBudgets()" style="width:100%;margin-top:18px;padding:15px;background:linear-gradient(135deg,#0F766E,#14B8A6);color:white;border:none;border-radius:16px;font-size:15px;font-weight:700">예산 저장</button>
   </div>
@@ -628,6 +630,15 @@ function currentBudgetMap(){
   return map;
 }
 
+function monthlySpentMap(){
+  var tx=allTx(), map={};
+  for(var i=0;i<tx.length;i++){
+    var t=tx[i];
+    if(t.month===CM&&t.type==='지출'&&t.amount>0)map[t.category]=(map[t.category]||0)+t.amount;
+  }
+  return map;
+}
+
 function budgetEditorCategories(){
   var list=(CONFIG.categories&&CONFIG.categories.length?CONFIG.categories:Object.keys(CONFIG.categorySubs||{})).slice();
   var monthBudget=BUDGETS[String(CM)]||BUDGETS[CM];
@@ -648,6 +659,14 @@ function renderBudgetEditor(){
   var title=gi('budgetEditorTitle'), list=gi('budgetEditorList');
   if(title)title.textContent=CM+'월 예산 수정';
   if(!list)return;
+  setBudgetEditorStatus('',false);
+  setBudgetSaving(false);
+  var prevBtn=gi('budgetPrevBtn');
+  if(prevBtn){
+    prevBtn.disabled=CM<=MIN_MONTH;
+    prevBtn.textContent=CM<=MIN_MONTH?'전월 예산 없음':'전월 예산 불러오기';
+    prevBtn.style.opacity=CM<=MIN_MONTH?'0.55':'1';
+  }
   var budgetMap=currentBudgetMap();
   var cats=budgetEditorCategories();
   var html='';
@@ -655,7 +674,9 @@ function renderBudgetEditor(){
     var cat=cats[i], val=budgetMap[cat]||0;
     html+='<div style="display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #F1F5F9">'
       +'<label style="-webkit-box-flex:1;flex:1;min-width:0;font-size:13px;font-weight:800;color:#1E293B">'+ge(cat)+' '+esc(cat)+'</label>'
-      +'<input type="text" class="fi" data-budget-cat="'+esc(cat)+'" inputmode="numeric" pattern="[0-9,]*" value="'+formatMoneyValue(val)+'" oninput="formatAmountInput(this)" style="width:132px;margin-top:0;text-align:right;font-weight:700" placeholder="0">'
+      +'<div style="display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;gap:4px;min-width:154px">'
+      +'<input type="text" class="fi" data-budget-cat="'+esc(cat)+'" inputmode="numeric" pattern="[0-9,]*" value="'+formatMoneyValue(val)+'" oninput="formatAmountInput(this)" style="-webkit-box-flex:1;flex:1;width:128px;min-width:110px;margin-top:0;text-align:right;font-weight:700" placeholder="0">'
+      +'<span style="font-size:12px;color:#64748B;font-weight:800">원</span></div>'
       +'</div>';
   }
   list.innerHTML=html||'<div style="text-align:center;color:#94A3B8;padding:20px;font-size:13px">수정할 예산 카테고리 없음</div>';
@@ -667,7 +688,60 @@ function openBudgetModal(){
 }
 
 function closeBudgetModal(){
+  if(SAVING_BUDGET)return;
   gi('budgetModal').className='modal-bg';
+}
+
+function setBudgetEditorStatus(text,on){
+  var status=gi('budgetEditorStatus');
+  if(!status)return;
+  status.textContent=text||'';
+  status.style.display=on?'block':'none';
+}
+
+function setBudgetSaving(on){
+  var btn=gi('budgetSaveBtn'), prev=gi('budgetPrevBtn');
+  if(btn){
+    btn.disabled=on;
+    btn.textContent=on?'저장 중...':'예산 저장';
+    btn.style.opacity=on?'0.7':'1';
+  }
+  if(prev)prev.disabled=on||CM<=MIN_MONTH;
+}
+
+function loadPreviousBudget(){
+  if(CM<=MIN_MONTH){
+    setBudgetEditorStatus('전월 예산 없음',true);
+    return;
+  }
+  var prevBudget=BUDGETS[String(CM-1)]||BUDGETS[CM-1];
+  var cats=prevBudget&&prevBudget.categories?prevBudget.categories:[];
+  if(!cats||cats.length===0){
+    setBudgetEditorStatus('전월 예산 없음',true);
+    return;
+  }
+  var map={};
+  for(var i=0;i<cats.length;i++){
+    var c=cats[i]||{};
+    if(c.category)map[c.category]=parseMoneyInput(c.budget);
+  }
+  var inputs=gi('budgetEditorList').querySelectorAll('input[data-budget-cat]');
+  for(var i=0;i<inputs.length;i++){
+    var cat=inputs[i].getAttribute('data-budget-cat');
+    inputs[i].value=formatMoneyValue(map[cat]||0);
+  }
+  setBudgetEditorStatus((CM-1)+'월 예산을 불러왔습니다',true);
+}
+
+function applyBudgetItems(items){
+  var spentMap=monthlySpentMap();
+  var cats=[];
+  for(var i=0;i<items.length;i++){
+    var item=items[i], budget=parseMoneyInput(item.budget), spent=spentMap[item.category]||0;
+    cats.push({category:item.category,budget:budget,spent:spent,diff:budget-spent,rate:budget?Math.round(spent/budget*100):0});
+  }
+  BUDGETS[String(CM)]={categories:cats};
+  BUDGETS[CM]=BUDGETS[String(CM)];
 }
 
 function saveBudgets(){
@@ -681,14 +755,9 @@ function saveBudgets(){
   for(var i=0;i<inputs.length;i++){
     items.push({category:inputs[i].getAttribute('data-budget-cat'),budget:parseMoneyInput(inputs[i].value)});
   }
-  var btn=gi('budgetSaveBtn');
-  var oldText=btn?btn.textContent:'예산 저장';
   SAVING_BUDGET=true;
-  if(btn){
-    btn.disabled=true;
-    btn.textContent='저장 중...';
-    btn.style.opacity='0.7';
-  }
+  setBudgetSaving(true);
+  setBudgetEditorStatus('저장 요청 중...',true);
   var url=API_BASE_URL+'?action=saveBudgets&month='+encodeURIComponent(CM)+'&items='+encodeURIComponent(JSON.stringify(items));
   fetch(url,{
     method:'GET',
@@ -696,22 +765,23 @@ function saveBudgets(){
     cache:'no-store'
   })
     .then(function(){
-      alert('예산 저장 요청 완료');
-      closeBudgetModal();
+      applyBudgetItems(items);
       renderStats();
-      setTimeout(function(){loadData();},1500);
+      setBudgetEditorStatus('시트 반영 중...',true);
+      setTimeout(function(){
+        loadData();
+        SAVING_BUDGET=false;
+        setBudgetSaving(false);
+        gi('budgetModal').className='modal-bg';
+        alert('예산 저장 요청 완료');
+      },1500);
     })
     .catch(function(err){
       console.warn('Google Sheets 예산 저장 요청 실패', err);
       alert('예산 저장 요청 실패');
-    })
-    .finally(function(){
       SAVING_BUDGET=false;
-      if(btn){
-        btn.disabled=false;
-        btn.textContent=oldText;
-        btn.style.opacity='1';
-      }
+      setBudgetSaving(false);
+      setBudgetEditorStatus('',false);
     });
 }
 
